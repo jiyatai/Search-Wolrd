@@ -1,7 +1,7 @@
-# X-Mobility - Isaac Sim + ROS2 Navigation Example
+# SearchWorld - Isaac Sim + ROS2 Navigation Example
 
-This example demonstrates how you can use the X-Mobility TensorRT engine
-to run navigation inside Isaac Sim using the ROS2 bridge and the ``x_mobility_navigator`` ROS2 package.
+This example demonstrates how you can use the SearchWorld TensorRT engine
+to run navigation inside Isaac Sim using the ROS2 bridge and the ``searchworld_navigator`` ROS2 package.
 
 <img src="../images/ros2_navigation_with_rviz.png" height=320/>
 
@@ -33,7 +33,7 @@ provided.
     pip3 install pycuda
     ```
 
-### Step 4 - Setup your ROS2 workspace and build x_mobility_navigator package
+### Step 4 - Setup your ROS2 workspace and build searchworld_navigator package
 
 1. Create the ros2 workspace folder
 
@@ -41,10 +41,10 @@ provided.
     mkdir -p ~/ros2_ws/src
     ```
 
-2. Create a symlink to the x_mobility_navigator ROS2 package in this repository.
+2. Create a symlink to the searchworld_navigator ROS2 package in this repository.
 
     ```bash
-    ln -s <repo root>/ros2_deployment/x_mobility_navigator ~/ros2_ws/src/x_mobility_navigator
+    ln -s <repo root>/ros2_deployment/searchworld_navigator ~/ros2_ws/src/searchworld_navigator
     ```
 
 3. Build the ROS2 workspace
@@ -67,9 +67,9 @@ provided.
     ```bash
     python3 trt_conversion.py -o <onnx_file_path> -t <trt_file_path>
     ```
-3. Copy the TensorRT engine to ``/tmp/x_mobility.engine``.  The x_mobility_navigator launch file uses this path by default.
+3. Copy the TensorRT engine to ``/tmp/searchworld.engine``.  The searchworld_navigator launch file uses this path by default.
 
-Now you have everything needed to run the ``x_mobility_navigator`` package.
+Now you have everything needed to run the ``searchworld_navigator`` package.
 
 But we'll return to this step later, first we need to enable ROS2 with Isaac Sim.
 
@@ -170,9 +170,9 @@ You should see the following topics
 
 Great, that means everything is running and we can interface with the simulated robot over ROS2.
 
-### Step 9 - Launch X-Mobility
+### Step 9 - Launch SearchWorld
 
-Now let's launch the X-Mobility package
+Now let's launch the SearchWorld package
 
 1. Source the built workspace
 
@@ -186,10 +186,10 @@ Now let's launch the X-Mobility package
     source install/setup.bash
     ```
 
-2. Launch the X-Mobility navigator
+2. Launch the SearchWorld navigator
 
     ```bash
-    ros2 launch x_mobility_navigator x_mobility_navigator.launch.py
+    ros2 launch searchworld_navigator searchworld_navigator.launch.py
     ```
 
 3. Set a goal pose: Select ``2D Goal Pose`` and then click on the map to set a position / orientation.

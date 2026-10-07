@@ -1,0 +1,96 @@
+# Stage-3 value-guided imagination planning configuration.
+#
+# NOTE (gin loading order): all DataModules must be imported (registering
+# their gin configurables) BEFORE gin.parse_config_file(...) is called,
+# otherwise bindings like RSSM.* are silently skipped. train_stage3.py
+# follows the same import-first order as train.py / deploy scripts.
+
+include 'configs/base_train_config.gin'
+
+# ==================== Core Settings ====================
+# Stage-3 trains ONLY the action head; the world model (RSSM + value decoder)
+# is loaded FROZEN from the stage-2 checkpoint inside ImaginationRLModule.
+IS_GWM_PRETRAIN=False
+ENABLE_SEMANTIC=False
+# Must MATCH the stage-2 checkpoint structure for strict state_dict loading:
+# the stage-2 model was trained with the RGB StyleGAN decoder and the
+# ActionPolicy present. They are loaded and frozen; the ActionPolicy is the
+# pi_BC prior that the value-guided target reweights.
+ENABLE_RGB_STYLEGAN=True
+ENABLE_RGB_DIFFUSION=False
+ENABLE_POLICY_DIFFUSION=False
+ENABLE_BEV_DECODER=True
+ENABLE_BEV_ENCODER=True
+
+# ==================== Dataset ====================
+# Requires the regenerated expert parquet with the 'pose' (x, y, yaw) and
+# 'target_rel' columns (see scripts/convert_expert_to_parquet.py).
+train.data_module=@UAVParquetDataModule
+UAVParquetDataModule.enable_semantic=False
+UAVParquetDataModule.enable_rgb_stylegan=True
+UAVParquetDataModule.is_gwm_pretrain=False
+UAVParquetDataModule.use_lazy_loading=True
+UAVParquetDataModule.enable_bev=True
+UAVParquetDataModule.batch_size=8
+UAVParquetDataModule.sequence_length=8
+UAVParquetDataModule.num_workers=16
+
+# ==================== Stage-2 checkpoint ====================
+# World model (RSSM + observation encoder + BEV/value decoder) frozen source.
+ImaginationRLModule.checkpoint_path = '/workspace/checkpoints/stage2.ckpt'
+# Set False only for smoke tests against the remapped gwm checkpoint
+# (which lacks action_policy.* / skip_convs.* keys).
+ImaginationRLModule.load_strict = True
+
+# ==================== Stage-3 RL hyperparameters ====================
+ImaginationRLModule.lr = 1e-5
+ImaginationRLModule.weight_decay = 0.01
+ImaginationRLModule.action_loss_weight = 1.0
+
+# Warm start: the actor is the Stage-2 BC action head, continued and refined
+# by the value-guided objective; stop stays under pi_BC. use_fresh_actor=True
+# reverts to a fresh head for the no-warm-start ablation.
+ImaginationRLModule.use_fresh_actor = False
+
+# ==================== Value-guided planning engine ====================
+# H: prior-only imagination horizon (paper appendix "Bounded imagination
+# depth"); gamma: discount of the H-step utility accumulation; tau: softmax
+# temperature of pi+ ∝ pi_BC * exp(Q_V / tau). q_V pools V_hat over the
+# action footprint (a SUM over in-grid cells, paper eq. q_V), so its scale is
+# the footprint area times the value in [0, 1] (order 1e3 cells); tau should
+# be tuned to that scale. All values are deferred to the training-machine
+# rerun (paper appendix tab:specs).
+ValueGuidedImaginationEngine.imagination_horizon = 8
+ValueGuidedImaginationEngine.gamma = 0.99
+ValueGuidedImaginationEngine.tau = 1000.0
+
+# Value-layer supervision hyperparameters (used by BEVLoss in Stages 1-2 when
+# the value decoder is TRAINED; the decoder is frozen in Stage 3, so these are
+# listed for reference only). Commented sensible defaults:
+# BEVLoss.lambda_expl = 1.0     # explored-region weight in V*
+# BEVLoss.lambda_goal = 1.0     # goal-Gaussian weight in V*
+# BEVLoss.sigma_g = 10.0        # goal Gaussian width (metres)
+# SearchWorldLoss.bev_value_weight = 1.0   # value-channel loss weight
+
+# Footprint geometry (paper appendix "Action footprint geometry"): the
+# canonical ego-frame sensor fan swept along each benchmark-fixed motion
+# delta, rasterized on the allocentric BEV grid.
+#   move_actions / stop_action: stop is held at pi_BC(stop) and excluded
+#       from the value-guided reweighting.
+#   action_deltas: benchmark-fixed deltas (5 m translations, 2 m vertical,
+#       15 deg rotations) live in model/rl/footprint.py (single source of
+#       truth); override there if the simulator differs.
+ValueGuidedImaginationEngine.value_channel = 2
+ValueGuidedImaginationEngine.bev_size = 256
+ValueGuidedImaginationEngine.bev_resolution = 0.4
+ValueGuidedImaginationEngine.sensor_range = 20.0
+ValueGuidedImaginationEngine.fov_half_angle_deg = 45.0
+ValueGuidedImaginationEngine.n_sweep = 5
+
+ImagRLActor.n_actions = %ACTION_SIZE
+ImagRLActor.hidden_dim = 512
+
+# ==================== Training ====================
+NUM_EPOCHS=30
+train.epochs=%NUM_EPOCHS
+train.precision="16-mixed"

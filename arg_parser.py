@@ -25,7 +25,7 @@ class TaskMode(Enum):
 def parse_arguments(task_mode):
     ''' Arguments parser for model training and evaluation.
     '''
-    description = 'Train X-Mobility' if task_mode == TaskMode.TRAIN else 'Eval X-Mobility'
+    description = 'Train SearchWorld' if task_mode == TaskMode.TRAIN else 'Eval SearchWorld'
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument('--config-files',
@@ -45,8 +45,8 @@ def parse_arguments(task_mode):
     parser.add_argument('--wandb-project-name',
                         '-n',
                         type=str,
-                        default='x_mobility_train'
-                        if task_mode == TaskMode.TRAIN else 'x_mobility_eval',
+                        default='searchworld_train'
+                        if task_mode == TaskMode.TRAIN else 'searchworld_eval',
                         help='The project name of W&B.')
     parser.add_argument(
         '--wandb-run-name',
@@ -66,13 +66,10 @@ def parse_arguments(task_mode):
                             required=True,
                             help='The path to the output dir.')
 
-    if task_mode == TaskMode.EVAL:
-        parser.add_argument(
-            '--eval_target',
-            '-t',
-            type=str,
-            default='observation',
-            help='Target to evaluate: [observation, imagination]')
+    # NOTE: TaskMode.EVAL is reserved for the closed-loop UAV-ON entry point
+    # (see deploy/README.md §5).  Offline evaluation uses evaluate_uav.py,
+    # which takes its arguments directly and therefore needs no eval flags
+    # here.
 
     args = parser.parse_args()
     return args

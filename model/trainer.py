@@ -19,15 +19,15 @@ import torch
 import wandb
 from torch import nn
 
-from model.loss.losses import XMobilityLoss
-from model.x_mobility.x_mobility import XMobility
-from model.eval.x_mobility_metrics import XMobilityMetrics
+from model.loss.losses import SearchWorldLoss
+from model.searchworld.searchworld import SearchWorld
+from model.eval.searchworld_metrics import SearchWorldMetrics
 from model.visualization import visualise_rgb, visualise_semantic, visualise_depth, visualise_attention
 
 
 @gin.configurable
-class XMobilityTrainer(pl.LightningModule):
-    '''Pytorch Lightnining module of x-mobility for training.
+class SearchWorldTrainer(pl.LightningModule):
+    '''PyTorch Lightning module for training the SearchWorld model.
     '''
     def __init__(self, weight_decay: float, lr: float,
                  scheduler_pct_start: float):
@@ -39,13 +39,13 @@ class XMobilityTrainer(pl.LightningModule):
         self.save_hyperparameters()
 
         # Model
-        self.model = XMobility()
+        self.model = SearchWorld()
 
         # Losses
-        self.loss = XMobilityLoss()
+        self.loss = SearchWorldLoss()
 
         # Metrics calculator.
-        self.metrics = XMobilityMetrics()
+        self.metrics = SearchWorldMetrics()
 
     def forward(self, batch):
         return self.model(batch)
@@ -145,7 +145,10 @@ class XMobilityTrainer(pl.LightningModule):
             self.logger.experiment.log({att_name: att_viz})
 
     def loss_reducing(self, loss: torch.Tensor):
-        total_loss = sum([x for x in loss.values()])
+        # 'monitor_' prefixed entries are detached diagnostics, not losses.
+        total_loss = sum([
+            x for k, x in loss.items() if not k.startswith('monitor_')
+        ])
         return total_loss
 
     def configure_optimizers(self):

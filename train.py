@@ -14,6 +14,33 @@
 # limitations under the License.
 
 import os
+import sys
+import signal
+
+# Set NCCL timeout to be shorter (default is 30min, too long)
+os.environ.setdefault('NCCL_TIMEOUT', '600')  # 10 minutes
+os.environ.setdefault('NCCL_BLOCKING_WAIT', '1')
+os.environ.setdefault('TORCH_NCCL_ASYNC_ERROR_HANDLING', '1')
+
+# Set CUDA devices before importing torch
+# Priority: 1) --gpus flag  2) CUDA_VISIBLE_DEVICES env  3) all GPUs
+if '--gpus' in sys.argv:
+    gpu_idx = sys.argv.index('--gpus')
+    if gpu_idx + 1 < len(sys.argv):
+        gpu_ids = sys.argv[gpu_idx + 1]
+        os.environ['CUDA_VISIBLE_DEVICES'] = gpu_ids
+        print(f"[train.py] Set CUDA_VISIBLE_DEVICES={gpu_ids}")
+        sys.argv.pop(gpu_idx)
+        sys.argv.pop(gpu_idx)
+
+# Detect actual CUDA_VISIBLE_DEVICES
+_cvd = os.environ.get('CUDA_VISIBLE_DEVICES', '')
+if _cvd:
+    _gpu_count = len([x for x in _cvd.split(',') if x.strip()])
+    print(f"[train.py] CUDA_VISIBLE_DEVICES={_cvd} -> PyTorch will see {_gpu_count} GPU(s)")
+else:
+    _gpu_count = None
+    print(f"[train.py] No CUDA_VISIBLE_DEVICES set, will use all GPUs")
 
 import gin
 import pytorch_lightning as pl
@@ -23,15 +50,27 @@ from pytorch_lightning.loggers import WandbLogger
 
 from arg_parser import parse_arguments, TaskMode
 
-from model.dataset.isaac_sim_dataset import XMobilityIsaacSimDataModule  # pylint: disable=unused-import
-from model.dataset.lerobot_dataset import XMobilityLeRobotDataModule  # pylint: disable=unused-import
-from model.trainer import XMobilityTrainer  # pylint: disable=unused-import
+from model.dataset.uav_dataset import UAVDataModule  # pylint: disable=unused-import
+from model.dataset.uav_parquet_dataset import UAVParquetDataModule  # pylint: disable=unused-import
+from model.trainer import SearchWorldTrainer  # pylint: disable=unused-import
 
 
 @gin.configurable
 def train(dataset_path, output_dir, ckpt_path, wandb_entity_name,
           wandb_project_name, wandb_run_name, precision, epochs, data_module,
-          model_trainer):
+          model_trainer, devices=None, ckpt_skip_n_epochs=30,
+          limit_train_batches=None, limit_val_batches=None,
+          accumulate_grad_batches=1):
+    # Auto-detect devices from env or use all GPUs
+    if devices is None or devices == "auto":
+        _cvd = os.environ.get('CUDA_VISIBLE_DEVICES', '')
+        if _cvd:
+            devices = len([x for x in _cvd.split(',') if x.strip()])
+        else:
+            import torch
+            devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
+    print(f"[train.py] Using devices={devices}")
+
     # Create a output directory if not exit.
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -48,22 +87,59 @@ def train(dataset_path, output_dir, ckpt_path, wandb_entity_name,
                                name=wandb_run_name,
                                save_dir=output_dir,
                                group="DDP",
-                               log_model=True)
+                               log_model=False)  # Disable model upload
+
+    # Custom checkpoint: skip first N epochs, then save top 2 + last
+    class CustomModelCheckpoint(ModelCheckpoint):
+        def __init__(self, skip_n_epochs=30, **kwargs):
+            super().__init__(**kwargs)
+            self.skip_n_epochs = skip_n_epochs
+
+        def _should_save_on_val_epoch_end(self, trainer, pl_module):
+            if trainer.current_epoch < self.skip_n_epochs:
+                return False
+            return super()._should_save_on_val_epoch_end(trainer, pl_module)
+
+    checkpoint_callback = CustomModelCheckpoint(
+        skip_n_epochs=ckpt_skip_n_epochs,
+        dirpath=os.path.join(output_dir, 'checkpoints'),
+        save_top_k=2,
+        monitor='val_loss',
+        mode='min',
+        save_last=True,
+    )
+    print(f"[train.py] checkpoint: skip_n_epochs={ckpt_skip_n_epochs}, "
+          f"limit_train_batches={limit_train_batches}, "
+          f"limit_val_batches={limit_val_batches}")
 
     callbacks = [
         pl.callbacks.ModelSummary(-1),
         pl.callbacks.LearningRateMonitor(),
-        ModelCheckpoint(dirpath=os.path.join(output_dir, 'checkpoints'),
-                        save_top_k=3,
-                        monitor='val_loss',
-                        mode='min',
-                        save_last=True),
+        checkpoint_callback,
     ]
+
+    # Add signal handler to clean up on interrupt
+    def cleanup_handler(signum, frame):
+        print(f"\n[train.py] Received signal {signum}, cleaning up...")
+        import torch.distributed as dist
+        if dist.is_initialized():
+            dist.destroy_process_group()
+        torch.cuda.empty_cache()
+        sys.exit(1)
+
+    signal.signal(signal.SIGTERM, cleanup_handler)
+    signal.signal(signal.SIGINT, cleanup_handler)
+
     trainer = pl.Trainer(max_epochs=epochs,
                          precision=precision,
+                         limit_train_batches=limit_train_batches,
+                         limit_val_batches=limit_val_batches,
+                         accumulate_grad_batches=accumulate_grad_batches,
                          sync_batchnorm=True,
                          callbacks=callbacks,
                          strategy='ddp_find_unused_parameters_true',
+                         devices=devices,
+                         accelerator="gpu",
                          logger=wandb_logger)
     trainer.fit(model, datamodule=data)
 

@@ -10,13 +10,13 @@ def load_requirements(filename):
 
 
 setup(
-    name='x_mobility',
+    name='searchworld',
     version='0.1.0',
     packages=find_packages(),
     package_dir={"": "."},
-    author='Wei Liu',
-    author_email='liuw@nvidia.com',
-    description='Python package for X-Mobility',
-    url='https://github.com/NVlabs/X-MOBILITY',
+    author='SearchWorld contributors',
+    author_email='',
+    description='SearchWorld: spatial value-grounded imagination for UAV object search via world models',
+    url='REPLACE_WITH_YOUR_REPOSITORY_URL',
     install_requires=load_requirements('requirements.txt'),
 )

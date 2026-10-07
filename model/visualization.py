@@ -21,7 +21,7 @@ import torch
 from PIL import Image
 import matplotlib.pyplot as plt
 
-from model.x_mobility.utils import pack_sequence_dim, unpack_sequence_dim
+from model.searchworld.utils import pack_sequence_dim, unpack_sequence_dim
 from model.dataset.lerobot_semantic_label import LEROBOT_SEMANTIC_COLORS
 from model.dataset.isaac_sim_semantic_label import SEMANTIC_COLORS
 

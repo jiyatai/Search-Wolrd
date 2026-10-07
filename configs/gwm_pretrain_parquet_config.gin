@@ -1,0 +1,53 @@
+# GWM Pretraining Config - UAV Parquet (fast loading)
+# Train world model (observation + RSSM + reconstructions) without policy
+
+include 'configs/base_train_config.gin'
+
+# ==================== Core Settings ====================
+# Enable GWM pretrain mode (no policy)
+IS_GWM_PRETRAIN=True
+ENABLE_SEMANTIC=True
+ENABLE_RGB_STYLEGAN=True    # Enable RGB StyleGAN decoder
+ENABLE_RGB_DIFFUSION=False
+ENABLE_POLICY_DIFFUSION=False
+ENABLE_BEV_DECODER=True     # Set to True to enable BEV decoder
+ENABLE_BEV_ENCODER=True      # Set to True to enable BEV encoder
+
+# ==================== Dataset ====================
+# Use Parquet dataset for faster loading
+train.data_module=@UAVParquetDataModule
+UAVParquetDataModule.enable_semantic=True
+UAVParquetDataModule.enable_rgb_stylegan=True
+UAVParquetDataModule.is_gwm_pretrain=True
+UAVParquetDataModule.use_lazy_loading=True
+UAVParquetDataModule.enable_bev=True  # Set to True when data has BEV
+
+# ==================== Training ====================
+NUM_EPOCHS=100
+train.epochs=%NUM_EPOCHS
+SearchWorldTrainer.lr=1e-5
+# 3e-5
+SearchWorldTrainer.weight_decay=0.01
+
+# DataLoader - larger batch sizes possible with Parquet
+# Stage 1 of the paper trains with batch size 8 and sequence length 8
+# (appendix, "Training"); every stage-2/stage-3 config already uses 8.
+UAVParquetDataModule.batch_size=8
+UAVParquetDataModule.sequence_length=8
+UAVParquetDataModule.num_workers=4
+
+# ==================== Loss Weights ====================
+# Focus on world modeling
+#
+# Paper Appendix: beta_KL = 1e-3.
+SearchWorldLoss.kl_weight=0.001
+SearchWorldLoss.semantic_weight=2.0
+SearchWorldLoss.rgb_weight=1.5  # Enable RGB reconstruction loss 1.0
+SearchWorldLoss.action_weight=0.0  # No policy in GWM pretrain
+SearchWorldLoss.path_weight=0.0
+SearchWorldLoss.depth_weight=0.0
+SearchWorldLoss.bev_weight=1.0
+SearchWorldLoss.bev_exploration_weight=1.0
+SearchWorldLoss.bev_obstacle_weight=1.0
+SearchWorldLoss.bev_value_weight=1.0
+SearchWorldLoss.enable_bev_decoder=True   # BEV loss weight

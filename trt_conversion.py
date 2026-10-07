@@ -46,7 +46,7 @@ def convert(onnx_path, trt_path):
 def main():
     # Parse the arguments.
     parser = argparse.ArgumentParser(
-        description='Convert the X-Mobility ONNX to TRT engine.')
+        description='Convert the SearchWorld ONNX to TRT engine.')
     parser.add_argument('--onnx-path',
                         '-o',
                         type=str,

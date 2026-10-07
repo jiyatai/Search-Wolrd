@@ -1,0 +1,14 @@
+# Smoke test config for stage-2 expert training (1 epoch, tiny batches).
+# Verifies: gin parse -> datamodule -> model build -> ckpt load (strict=False)
+#           -> forward/backward -> val -> checkpoint save.
+include 'configs/stage2_expert_parquet_config.gin'
+
+NUM_EPOCHS=1
+train.epochs=%NUM_EPOCHS
+train.ckpt_skip_n_epochs=0
+UAVParquetDataModule.batch_size=2
+UAVParquetDataModule.num_workers=2
+train.limit_train_batches=4
+train.limit_val_batches=2
+train.precision="32-true"
+train.devices=1

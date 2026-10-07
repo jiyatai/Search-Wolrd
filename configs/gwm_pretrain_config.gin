@@ -1,0 +1,38 @@
+# GWM Pretraining Config - World Model First Stage
+# Train world model (observation + RSSM + reconstructions) without policy
+
+include 'configs/base_train_config.gin'
+
+# ==================== Core Settings ====================
+# Enable GWM pretrain mode (no policy)
+IS_GWM_PRETRAIN=True
+ENABLE_SEMANTIC=True
+ENABLE_RGB_STYLEGAN=False
+ENABLE_RGB_DIFFUSION=False
+ENABLE_POLICY_DIFFUSION=False
+
+# ==================== Dataset ====================
+train.data_module=@UAVDataModule
+UAVDataModule.enable_semantic=True
+UAVDataModule.enable_depth=False
+UAVDataModule.camera_view="front"
+
+# ==================== Training ====================
+NUM_EPOCHS=100
+train.epochs=%NUM_EPOCHS
+SearchWorldTrainer.lr=3e-5
+SearchWorldTrainer.weight_decay=0.01
+
+# Dataloader - adjust based on your GPU memory
+UAVDataModule.batch_size=16
+UAVDataModule.sequence_length=4
+UAVDataModule.num_workers=4
+
+# ==================== Loss Weights ====================
+# Focus on world modeling
+SearchWorldLoss.kl_weight=0.001
+SearchWorldLoss.semantic_weight=2.0
+SearchWorldLoss.rgb_weight=0.0  # Disable for now, focus on semantic
+SearchWorldLoss.action_weight=0.0  # No policy in GWM pretrain
+SearchWorldLoss.path_weight=0.0
+SearchWorldLoss.depth_weight=0.0

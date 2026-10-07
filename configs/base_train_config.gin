@@ -1,7 +1,7 @@
 # Shared macros
-NUM_SEMANTIC_CLASSES=7
-ACTION_SIZE=6
-# Path dim is 2 and path length is 5.
+NUM_SEMANTIC_CLASSES=6
+ACTION_SIZE=8
+# Path dim is 2 and path length is 5 (unused for UAV discrete actions).
 FLAT_PATH_SIZE=10
 NUM_EPOCHS=100
 RECEPTIVE_FIELD=1
@@ -11,43 +11,41 @@ ENABLE_RGB_STYLEGAN=False
 ENABLE_RGB_DIFFUSION=False
 ENABLE_POLICY_DIFFUSION=False
 IS_GWM_PRETRAIN=False
+ENABLE_BEV_DECODER=False
+ENABLE_BEV_ENCODER=False
 
 # Train
 train.epochs=%NUM_EPOCHS
 train.precision="16-mixed"
-train.data_module=@XMobilityIsaacSimDataModule
-train.model_trainer=@XMobilityTrainer
-
-# Evaluate
-evaluate_observation.num_gpus=1
-evaluate_observation.precision="16-mixed"
-evaluate_prediction.max_history_length=5
-evaluate_prediction.max_future_length=[1, 2, 3, 4, 5, 10]
-evaluate_prediction.use_trained_policy=True
+train.data_module=@UAVDataModule
+train.model_trainer=@SearchWorldTrainer
+train.devices="auto"  # Set to number of GPUs or list like [0,1] or "auto"
+train.ckpt_skip_n_epochs=30  # Don't save checkpoints before this epoch
 
 #Trainer
-XMobilityTrainer.weight_decay=0.01
-XMobilityTrainer.lr=1e-5
-XMobilityTrainer.scheduler_pct_start=0.2
+SearchWorldTrainer.weight_decay=0.01
+SearchWorldTrainer.lr=1e-5
+SearchWorldTrainer.scheduler_pct_start=0.2
 
 # Dataloader
-XMobilityIsaacSimDataModule.batch_size=4
-XMobilityIsaacSimDataModule.sequence_length=%SEQUENCE_LENGTH
-XMobilityIsaacSimDataModule.num_workers=4
-XMobilityIsaacSimDataModule.is_gwm_pretrain=%IS_GWM_PRETRAIN
-XMobilityIsaacSimDataModule.enable_semantic=%ENABLE_SEMANTIC
-XMobilityIsaacSimDataModule.enable_rgb_stylegan=%ENABLE_RGB_STYLEGAN
-XMobilityIsaacSimDataModule.precomputed_semantic_label=True
-XMobilityIsaacSimDataModule.use_lazy_loading=False
+UAVDataModule.batch_size=4
+UAVDataModule.sequence_length=%SEQUENCE_LENGTH
+UAVDataModule.num_workers=4
+UAVDataModule.camera_view="front"
+UAVDataModule.text_encoder_name="google/siglip2-base-patch16-224"
+UAVDataModule.enable_depth=False
 
 #Encoders
-SpeedEncoder.out_channels=32
-SpeedEncoder.speed_normalisation=1.5
-VectorNetSubGraph.vec_size=4
-VectorNetSubGraph.num_layers=4
-ImageDepthAnythingEncoder.enable_fine_tune=True
-ImageDINOEncoder.enable_fine_tune=True
-ObservationEncoder.image_encoder=@ImageDINOEncoder
+PoseEncoder.out_channels=32
+PoseEncoder.pose_normalisation=50.0
+ImageSigLIPEncoder.enable_fine_tune=False
+ImageDINOEncoder.enable_fine_tune=False
+UAVObservationEncoder.dino_encoder=@ImageDINOEncoder
+UAVObservationEncoder.siglip_encoder=@ImageSigLIPEncoder
+UAVObservationEncoder.pose_out_channels=32
+UAVObservationEncoder.embedding_dim=1024
+UAVObservationEncoder.enable_bev=%ENABLE_BEV_ENCODER
+UAVObservationEncoder.bev_dim=1024
 
 # Decoders
 SegmentationHead.n_classes=%NUM_SEMANTIC_CLASSES
@@ -69,31 +67,33 @@ ConditionalUnet1D.kernel_size = 3
 
 # ActionPolicy
 ActionPolicy.policy_state_dim = 2048
-ActionPolicy.route_encoder=@VectorNetSubGraph
+ActionPolicy.text_feat_dim = 768
 ActionPolicy.policy_state_fusion_mode="self_attn"
 ActionPolicy.enable_policy_diffusion=%ENABLE_POLICY_DIFFUSION
 
 # Losses
 KLLoss.alpha=0.75
-ActionLoss.norm=1
 SegmentationLoss.use_top_k=False
 SegmentationLoss.top_k_ratio=0.25
 SegmentationLoss.use_poly_one=False
 SegmentationLoss.poly_one_coefficient=0.0
 SegmentationLoss.use_weights=True
-SegmentationLoss.semantic_weights=[1.0, 2.0, 5.0, 5.0, 5.0, 5.0, 5.0]
-XMobilityLoss.action_weight=10.0
-XMobilityLoss.path_weight = 5.0
-XMobilityLoss.kl_weight=0.001
-XMobilityLoss.semantic_weight=2.0
-XMobilityLoss.rgb_weight=5.0
-XMobilityLoss.enable_semantic=%ENABLE_SEMANTIC
-XMobilityLoss.enable_rgb_stylegan=%ENABLE_RGB_STYLEGAN
-XMobilityLoss.enable_rgb_diffusion=%ENABLE_RGB_DIFFUSION
-XMobilityLoss.enable_policy_diffusion=%ENABLE_POLICY_DIFFUSION
-XMobilityLoss.is_gwm_pretrain=%IS_GWM_PRETRAIN
-XMobilityLoss.diffusion_weight=10.0
-XMobilityLoss.depth_weight=10.0
+SegmentationLoss.semantic_weights=[1.0, 2.0, 3.0, 5.0, 4.0, 2.5]
+SearchWorldLoss.action_weight=10.0
+SearchWorldLoss.path_weight = 5.0
+# NOTE (beta_KL): this is the value reported in the paper appendix (tab:specs). The
+# stage-1 / stage-2 configs intentionally override it to 3e-3 to stay in the regime the
+# released checkpoints were trained in -- see configs/gwm_pretrain_parquet_config.gin.
+SearchWorldLoss.kl_weight=0.001  # paper Appendix beta_KL
+SearchWorldLoss.semantic_weight=2.0
+SearchWorldLoss.rgb_weight=5.0
+SearchWorldLoss.enable_semantic=%ENABLE_SEMANTIC
+SearchWorldLoss.enable_rgb_stylegan=%ENABLE_RGB_STYLEGAN
+SearchWorldLoss.enable_rgb_diffusion=%ENABLE_RGB_DIFFUSION
+SearchWorldLoss.enable_policy_diffusion=%ENABLE_POLICY_DIFFUSION
+SearchWorldLoss.is_gwm_pretrain=%IS_GWM_PRETRAIN
+SearchWorldLoss.diffusion_weight=10.0
+SearchWorldLoss.depth_weight=10.0
 
 # RSSM
 RSSM.action_dim=%ACTION_SIZE
@@ -104,8 +104,17 @@ RSSM.receptive_field=%RECEPTIVE_FIELD
 RSSM.use_dropout=False
 RSSM.dropout_probability=0.0
 
-# XMobility
-XMobility.enable_semantic=%ENABLE_SEMANTIC
-XMobility.enable_rgb_stylegan=%ENABLE_RGB_STYLEGAN
-XMobility.enable_rgb_diffusion=%ENABLE_RGB_DIFFUSION
-XMobility.is_gwm_pretrain=%IS_GWM_PRETRAIN
+# SearchWorld
+SearchWorld.enable_semantic=%ENABLE_SEMANTIC
+SearchWorld.enable_rgb_stylegan=%ENABLE_RGB_STYLEGAN
+SearchWorld.enable_rgb_diffusion=%ENABLE_RGB_DIFFUSION
+SearchWorld.is_gwm_pretrain=%IS_GWM_PRETRAIN
+SearchWorld.enable_bev_decoder=%ENABLE_BEV_DECODER
+
+# SearchWorldLoss - complete params
+SearchWorldLoss.enable_bev_decoder=%ENABLE_BEV_DECODER
+SearchWorldLoss.diffusion_weight=10.0
+SearchWorldLoss.bev_weight=1.0
+SearchWorldLoss.bev_exploration_weight=1.0
+SearchWorldLoss.bev_obstacle_weight=1.0
+SearchWorldLoss.bev_value_weight=1.0

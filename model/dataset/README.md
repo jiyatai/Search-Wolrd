@@ -1,12 +1,44 @@
 # Dataset
 
-This directory contains the dataset loaders used for training and evaluating the X-MOBILITY models.
+This directory contains the dataset loaders used for training and evaluating SearchWorld models.
 
-## IsaacSimDataset
-Dataloader for dataset collected with [Isaac Sim Replicator](https://docs.omniverse.nvidia.com/isaacsim/latest/replicator_tutorials/index.html) and Nav2 navigation stack. Example available at https://huggingface.co/datasets/nvidia/X-Mobility.
+## UAVDataset
+Loader for the raw AirSim episode layout produced by
+[`scripts/data_pipeline/`](../../scripts/data_pipeline/README.md): it reads images and
+depth maps straight from disk, which is convenient for debugging, dataloader
+development and small-scale experiments.
+(The loader is layout-compatible with the upstream
+[nvidia/X-Mobility](https://huggingface.co/datasets/nvidia/X-Mobility) ground-vehicle
+dataset, which it grew out of.)
 
 ### Data Format
-Each dataset is stored in Parquet (`.pqt`) files, which provide efficient columnar storage for structured data.
+Each episode is a directory tree of PNG/NPY/JSON files:
+
+```
+<dataset_path>/
+ - episode_0001/
+    - episode_summary.json     # episode-level metadata
+    - step_0000/
+       - rgb_front.png         # front-camera RGB
+       - depth_front.npy       # GT depth (256x256 float32)
+       - semantic_front.npy    # semantic labels (h, w uint8), optional
+       - state.json            # per-step state (pose, action, task...)
+    - step_0001/ ... step_0049/
+ - episode_0002/
+    ...
+```
+
+## UAVParquetDataset
+Parquet (`.pqt`) variant of the same data, and the loader used by every training run:
+columnar storage keeps the three-stage curriculum comfortable to stream from disk, and
+Parquet is the format emitted by the conversion scripts.
+
+### Data Format
+Each split folder holds one or more scenarios, with several runs per scenario. Rows
+carry the encoded image/depth columns plus, optionally, the BEV and semantic columns
+consumed by the BEV and semantic decoders; see
+[`scripts/data_pipeline/README.md`](../../scripts/data_pipeline/README.md) for the
+exact column set written by each converter.
 
 ### Data Folder Structure
 The dataset is organized into train, validation, and test splits, with multiple scenarios in each:
@@ -42,28 +74,15 @@ data
         ...
 ```
 
-## LeRobotDataset
-Dataloader for dataset collected with [MobilityGen](https://github.com/NVLabs/MobilityGen) and exported to Lerobot.
+## gin configurables
+Both loaders are `@gin.configurable`. A training entry point must import
+`model.dataset` (or either loader module) **before** `gin.parse_config_file(...)` is
+called, otherwise the `UAVDataModule.*` / `UAVParquetDataModule.*` bindings are
+silently skipped, because the entry points parse their configs with
+`skip_unknown=True`.
 
-### Data Format
-Contained within a single folder, the LeRobotDataset format makes use of several ways to serialize data which can be 
-useful to understand if you plan to work more closely with this format. Please refer to the 
-[source repository](https://github.com/huggingface/lerobot/tree/main) for more information.
-
-### Additional Considerations
-Currently the XMobilityLeRobotDatasetModule requires the following changes to source in order to be used with XMobility:
- - The semantic images need to be 3 channels, due to the specification, but only a single channel is used; therefore, all channels need to be the same value
- - All references to SemanticLabel need to be replaced with LeRobotSemanticLabel or the equivalent for your dataset
- - All references to SEMANTIC_COLORS need to be replaced with LEROBOT_SEMANTIC_COLORS or the equivalent for your dataset
- - Either modify or add a gin config file such that it is representative of your dataset
- - FIXED_ROUTE_SIZE and ROUTE_POSE_SIZE in lerobot_dataset.py may need to be updated to reflect your dataset
- - The lerobot dataset's metadata (meta/info.json) will need to be manually modified to include your intended train, test, val split, see below; the values represent episodes.
- - NOTE: The current example expects the robot to not use linear_y velocity
-
-```
-"splits": {
-    "train": "0:70",
-    "validate" : "70:78",
-    "test" : "78:86"
-},
-```
+## Semantic label palettes
+`isaac_sim_semantic_label.py` defines `SemanticLabel` / `SEMANTIC_COLORS`, the class
+id → colour mapping of the simulator segmentation export. It is used by
+`model/visualization.py` and, for batches that carry segmentation ground truth, by
+`model/eval/searchworld_metrics.py`.

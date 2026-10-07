@@ -23,26 +23,26 @@ import torch
 import torch.nn.functional as F
 
 from model.dataset.data_constants import INPUT_IMAGE_SIZE
-from model.trainer import XMobilityTrainer
+from model.trainer import SearchWorldTrainer
 
 
-class XMobilityInference(pl.LightningModule):
-    ''' Wrapper of X-Mobility for Onnx conversion.
+class SearchWorldInference(pl.LightningModule):
+    ''' Wrapper of SearchWorld for Onnx conversion.
     '''
     def __init__(self, checkpoint_path: str, enable_semantic: bool,
                  enable_rgb: bool, enable_depth: bool):
         super().__init__()
-        self.x_mobility = XMobilityTrainer.load_from_checkpoint(
+        self.searchworld = SearchWorldTrainer.load_from_checkpoint(
             checkpoint_path=checkpoint_path)
         self.enable_semantic = enable_semantic
         self.enable_rgb = enable_rgb
         self.enable_depth = enable_depth
         # Add policy noise as input for diffusion policy.
-        if self.x_mobility.model.action_policy.enable_policy_diffusion:
+        if self.searchworld.model.action_policy.enable_policy_diffusion:
             self.register_buffer(
                 "policy_noise",
                 torch.randn((1,
-                             self.x_mobility.model.action_policy.
+                             self.searchworld.model.action_policy.
                              policy_diffuser.num_input_channels()),
                             dtype=torch.float32))
 
@@ -61,18 +61,18 @@ class XMobilityInference(pl.LightningModule):
         inputs['action'] = action_input
         inputs['history'] = history_input
         inputs['sample'] = sample_input
-        if self.x_mobility.model.action_policy.enable_policy_diffusion:
+        if self.searchworld.model.action_policy.enable_policy_diffusion:
             inputs['policy_noise'] = self.policy_noise
         # Outputs: [action_output, history_output, sample_output, semantic_output, rgb_output]
         # "semantic_output" and "rgb_output" can be None depends on the input booleans.
-        return self.x_mobility.inference(inputs, self.enable_semantic,
+        return self.searchworld.inference(inputs, self.enable_semantic,
                                          self.enable_rgb, self.enable_depth)
 
 
 def convert(checkpoint_path: str, onnx_path: str, enable_semantic: bool,
             enable_rgb: bool, enable_depth: bool):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = XMobilityInference(checkpoint_path, enable_semantic, enable_rgb,
+    model = SearchWorldInference(checkpoint_path, enable_semantic, enable_rgb,
                                enable_depth)
 
     model.to(device)
@@ -112,7 +112,7 @@ def convert(checkpoint_path: str, onnx_path: str, enable_semantic: bool,
 def main():
     # Parse the arguments.
     parser = argparse.ArgumentParser(
-        description='Convert the X-Mobility to onnx.')
+        description='Convert the SearchWorld to onnx.')
     parser.add_argument('--ckpt-path',
                         '-p',
                         type=str,

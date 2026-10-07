@@ -18,7 +18,7 @@
 #   64 * StyleGanDecoder.constant_size, where constant_size is currently set as (5, 8).
 #   While not stricly required, it's better to make the input image as the same size
 #   for easier evaluation and analysis.
-# - Trade-off between GPU memory usage and model performace. X-mobility is trained with sequences
+# - Trade-off between GPU memory usage and model performace. SearchWorld is trained with sequences
 #   of frames, requiring large amount of GPU memory, therefore it's preferred to keeping the
 #   input image size relatively small to increase the sequence_length for better model performance.
 INPUT_IMAGE_SIZE = (320, 512)
