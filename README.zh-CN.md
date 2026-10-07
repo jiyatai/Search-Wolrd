@@ -4,7 +4,6 @@
 
 **基于世界模型的空间价值引导想象式无人机目标搜索**
 
-[![Paper](https://img.shields.io/badge/Paper-ICLR%202027%20Submission-blue.svg)](#引用)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
