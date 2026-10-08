@@ -70,19 +70,6 @@ SearchWorld/
 └── tmp/                        # 开发分析工具
 ```
 
-### 论文各要素在代码中的位置
-
-| 论文要素 | 实现位置 |
-|---|---|
-| BEV 栅格与仿射映射（eq. grid） | `model/loss/bev_grid.py` —— **唯一真源** |
-| 探索层（eq. expl） | `model/searchworld/bev_memory.py`、`scripts/data_pipeline/convert_uav_to_parquet.py` |
-| 障碍层（针孔反投影） | 同上 |
-| 价值目标 $V^{\ast}$（eq. valuetarget） | `model/loss/value_target.py` |
-| 价值引导更新 $\pi^{+}$（eq. piplus） | `model/rl/imagination.py` |
-| 动作损失（eq. actionloss） | `model/rl/imagination.py`、`model/rl/trainer.py` |
-| 动作足迹 $K^a$ | `model/rl/footprint.py` |
-| 三阶段课程 | `configs/*.gin` + `train.py` / `train_stage3.py` |
-
 ## 安装
 
 参考环境为 NVIDIA PyTorch 容器，仓库内 `Dockerfile` 与之对应。
