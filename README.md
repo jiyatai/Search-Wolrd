@@ -82,20 +82,6 @@ SearchWorld/
 ├── ros2_deployment/            # ROS2 + Isaac Sim demo
 └── tmp/                        # developer analysis utilities
 ```
-
-### Where the paper lives in the code
-
-| Paper element | Implementation |
-|---|---|
-| BEV grid & affine map (eq. grid) | `model/loss/bev_grid.py` — **single source of truth** |
-| Exploration layer (eq. expl) | `model/searchworld/bev_memory.py`, `scripts/data_pipeline/convert_uav_to_parquet.py` |
-| Obstacle layer (pinhole back-projection) | same as above |
-| Value target $V^{\ast}$ (eq. valuetarget) | `model/loss/value_target.py` |
-| Value-guided update $\pi^{+}$ (eq. piplus) | `model/rl/imagination.py` |
-| Action loss (eq. actionloss) | `model/rl/imagination.py`, `model/rl/trainer.py` |
-| Action footprints $K^a$ | `model/rl/footprint.py` |
-| Three-stage curriculum | `configs/*.gin` + `train.py` / `train_stage3.py` |
-
 ## Installation
 
 The reference environment is the NVIDIA PyTorch container; a `Dockerfile` mirrors it.
